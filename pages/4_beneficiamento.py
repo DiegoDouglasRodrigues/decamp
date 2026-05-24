@@ -1,10 +1,50 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
-from faker import Faker
+import sqlite3
 from datetime import date
 
 st.title("Beneficiamento")
+
+# =====================================================
+# CARREGA DADOS SQLITE
+# =====================================================
+@st.cache_data
+def carregar_dados():
+
+    conn = sqlite3.connect("expedicao.db")
+
+    query = """
+    SELECT
+        id,
+        lote,
+        nf_saida,
+        loja,
+        ce,
+        cor,
+        peso_programado,
+        data_programada,
+        data_enviada,
+        peso_enviado,
+        data_recebida,
+        peso_recebido
+    FROM expedicao
+    """
+
+    df = pd.read_sql_query(query, conn)
+
+    conn.close()
+
+    return df
+
+
+# =====================================================
+# SESSION STATE
+# =====================================================
+if "df" not in st.session_state:
+    st.session_state.df = carregar_dados()
+
+df = st.session_state.df
+
 
 # =====================================================
 # PESQUISA
@@ -16,59 +56,37 @@ with st.container(border=True):
     col_input, col_btn = st.columns([3, 1])
 
     with col_input:
+
         pedido = st.text_input(
             "Número do pedido",
             label_visibility="collapsed"
         )
 
     with col_btn:
+
         pesquisar = st.button("🔍")
 
     if pesquisar:
+
         if pedido:
-            st.success(f"Buscando pedido: {pedido}")
+
+            filtro = df[
+                df["lote"].astype(str).str.contains(
+                    pedido,
+                    case=False,
+                    na=False
+                )
+            ]
+
+            st.session_state.df = filtro
+
+            st.success(f"Resultado para: {pedido}")
+
         else:
+
+            st.session_state.df = carregar_dados()
+
             st.warning("Digite um número de pedido.")
-
-
-# =====================================================
-# DATAFRAME
-# =====================================================
-@st.cache_data
-def get_profile_dataset(
-        number_of_items: int = 20,
-        seed: int = 0
-):
-
-    fake = Faker()
-
-    np.random.seed(seed)
-    Faker.seed(seed)
-
-    data = []
-
-    for _ in range(number_of_items):
-
-        profile = fake.profile()
-
-        data.append(
-            {
-                "name": profile["name"],
-                "cor_beneficiamento": "",
-                "data_beneficiamento": None,
-            }
-        )
-
-    return pd.DataFrame(data)
-
-
-# =====================================================
-# SESSION STATE
-# =====================================================
-if "df" not in st.session_state:
-    st.session_state.df = get_profile_dataset()
-
-df = st.session_state.df
 
 
 # =====================================================
@@ -76,18 +94,63 @@ df = st.session_state.df
 # =====================================================
 column_configuration = {
 
-    "name": st.column_config.TextColumn(
-        "Nome",
-        width="medium",
+    "id": st.column_config.NumberColumn(
+        "ID",
+        width="small",
     ),
 
-    "cor_beneficiamento": st.column_config.TextColumn(
-        "Cor Beneficiamento",
-        width="medium",
+    "lote": st.column_config.NumberColumn(
+        "Lote",
+        width="small",
     ),
 
-    "data_beneficiamento": st.column_config.DateColumn(
-        "Data Beneficiamento",
+    "nf_saida": st.column_config.NumberColumn(
+        "NF Saída",
+        width="small",
+    ),
+
+    "loja": st.column_config.TextColumn(
+        "Loja",
+        width="small",
+    ),
+
+    "ce": st.column_config.TextColumn(
+        "C/E",
+        width="small",
+    ),
+
+    "cor": st.column_config.TextColumn(
+        "Cor",
+        width="small",
+    ),
+
+    "peso_programado": st.column_config.NumberColumn(
+        "Peso Programado",
+        format="%.2f",
+    ),
+
+    "peso_enviado": st.column_config.NumberColumn(
+        "Peso Enviado",
+        format="%.2f",
+    ),
+
+    "peso_recebido": st.column_config.NumberColumn(
+        "Peso Recebido",
+        format="%.2f",
+    ),
+
+    "data_programada": st.column_config.DateColumn(
+        "Data Programada",
+        format="DD/MM/YYYY",
+    ),
+
+    "data_enviada": st.column_config.DateColumn(
+        "Data Enviada",
+        format="DD/MM/YYYY",
+    ),
+
+    "data_recebida": st.column_config.DateColumn(
+        "Data Recebida",
         format="DD/MM/YYYY",
     ),
 }
@@ -99,7 +162,7 @@ column_configuration = {
 st.subheader("Todos os registros")
 
 event = st.dataframe(
-    df,
+    st.session_state.df,
     column_config=column_configuration,
     use_container_width=True,
     hide_index=True,
@@ -148,7 +211,7 @@ if people:
         )
 
     # =============================================
-    # BOTÕES CRUD
+    # BOTÕES
     # =============================================
     col_btn1, col_btn2, col_btn3 = st.columns(3)
 
@@ -174,59 +237,67 @@ if people:
         )
 
     # =============================================
-    # SALVAR
+    # SALVAR SQLITE
     # =============================================
     if salvar:
 
+        conn = sqlite3.connect("expedicao.db")
+
+        cursor = conn.cursor()
+
         for row in people:
 
-            st.session_state.df.loc[
-                row,
-                "data_beneficiamento"
-            ] = data_escolhida
+            registro_id = st.session_state.df.iloc[row]["id"]
 
-            st.session_state.df.loc[
-                row,
-                "cor_beneficiamento"
-            ] = cor_escolhida
+            cursor.execute("""
+                UPDATE expedicao
+                SET
+                    cor = ?,
+                    data_recebida = ?
+                WHERE id = ?
+            """, (
+                cor_escolhida,
+                data_escolhida.strftime("%Y-%m-%d"),
+                int(registro_id)
+            ))
+
+        conn.commit()
+        conn.close()
+
+        st.cache_data.clear()
+
+        st.session_state.df = carregar_dados()
 
         st.success("Dados atualizados com sucesso!")
 
         st.rerun()
 
     # =============================================
-    # EXCLUIR
+    # EXCLUIR SQLITE
     # =============================================
     if excluir:
 
-        st.session_state.df = (
-            st.session_state.df
-            .drop(index=people)
-            .reset_index(drop=True)
-        )
+        conn = sqlite3.connect("expedicao.db")
 
-        st.success("Registro(s) removido(s)!")
-
-        st.rerun()
-
-    # =============================================
-    # LIMPAR
-    # =============================================
-    if limpar:
+        cursor = conn.cursor()
 
         for row in people:
 
-            st.session_state.df.loc[
-                row,
-                "data_beneficiamento"
-            ] = None
+            registro_id = st.session_state.df.iloc[row]["id"]
 
-            st.session_state.df.loc[
-                row,
-                "cor_beneficiamento"
-            ] = ""
+            cursor.execute("""
+                DELETE FROM expedicao
+                WHERE id = ?
+            """, (int(registro_id),))
 
-        st.success("Campos limpos!")
+        conn.commit()
+        conn.close()
+
+        st.cache_data.clear()
+
+        st.session_state.df = carregar_dados()
+
+        st.success("Registro(s) removido(s)!")
 
         st.rerun()
 

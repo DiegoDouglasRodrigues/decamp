@@ -4,7 +4,8 @@ import streamlit as st
 import datetime
 
 
-st.title('essa é a minha pagina inicial - teste !')
+st.title('essa é a minha pagina inicial - teste final!')
+
 
 st.write('___________________________________________________________________________________________________________________________________________________________')
 
@@ -21,6 +22,7 @@ with col1:
 
 
 with col2:
+
     if st.button("🔍 Operacional"):
         st.switch_page("pages/2_operacional.py")
 

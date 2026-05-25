@@ -5,6 +5,8 @@ import datetime
 
 
 st.title('essa é a minha pagina inicial!!!!')
+st.title('essa é a minha pagina inicial!!!!')
+st.title('essa é a minha pagina inicial!!!!')
 
 st.write('___________________________________________________________________________________________________________________________________________________________')
 
